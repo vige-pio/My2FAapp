@@ -77,14 +77,10 @@ function bindGlobalHandlers() {
   $('#exportModal').addEventListener('click', (e) => {
     if (e.target === $('#exportModal')) closeExportModal();
   });
-  $$('[data-export-tab]').forEach(t => {
-    t.addEventListener('click', () => switchExportTab(t.dataset.exportTab));
-  });
 
   // インポートモーダル
   $('#importCancelBtn').addEventListener('click', closeImportModal);
   $('#importFile').addEventListener('change', onImportFileSelected);
-  $('#importDecryptBtn').addEventListener('click', onImportDecrypt);
   $('#importConfirmBtn').addEventListener('click', onImportConfirm);
   $('#importModal').addEventListener('click', (e) => {
     if (e.target === $('#importModal')) closeImportModal();
@@ -402,25 +398,17 @@ async function onSaveAccount() {
   }
 }
 
-// ---------- エクスポート ----------
+// ---------- エクスポート (WinAuth互換: 1行1 otpauth:// URI) ----------
 
 function openExportModal() {
   $('#exportModal').classList.remove('hidden');
   $('#exportError').textContent = '';
-  $('#exportPassword').value = '';
-  $('#exportPasswordConfirm').value = '';
-  $('#exportPlainAck').checked = false;
+  $('#exportAck').checked = false;
   $('#exportCount').textContent = String(accounts.length);
-  switchExportTab('encrypted');
 }
 
 function closeExportModal() {
   $('#exportModal').classList.add('hidden');
-}
-
-function switchExportTab(name) {
-  $$('[data-export-tab]').forEach(t => t.classList.toggle('active', t.dataset.exportTab === name));
-  $$('[data-export-pane]').forEach(p => p.classList.toggle('hidden', p.dataset.exportPane !== name));
 }
 
 async function onRunExport() {
@@ -430,45 +418,25 @@ async function onRunExport() {
     errEl.textContent = 'エクスポートするアカウントがありません';
     return;
   }
-  const mode = document.querySelector('[data-export-tab].active').dataset.exportTab;
+  if (!$('#exportAck').checked) {
+    errEl.textContent = '「リスクを理解しました」にチェックを入れてください';
+    return;
+  }
 
   try {
-    // 内部用フィールド (id, createdAt) はエクスポートしない
-    const sanitized = accounts.map(({ id, createdAt, ...rest }) => rest);
-    let envelope;
-    let filenameSuffix;
-
-    if (mode === 'encrypted') {
-      const pw = $('#exportPassword').value;
-      const pw2 = $('#exportPasswordConfirm').value;
-      if (pw.length < 8) throw new Error('パスワードは8文字以上にしてください');
-      if (pw !== pw2) throw new Error('パスワードが一致しません');
-      envelope = await encryptForExport(pw, sanitized);
-      filenameSuffix = 'encrypted';
-    } else {
-      if (!$('#exportPlainAck').checked) {
-        throw new Error('「リスクを理解しました」にチェックを入れてください');
-      }
-      envelope = {
-        type: 'self-built-2fa-export',
-        version: 1,
-        encrypted: false,
-        accounts: sanitized,
-      };
-      filenameSuffix = 'PLAINTEXT';
-    }
-
-    const json = JSON.stringify(envelope, null, 2);
+    const lines = accounts.map(buildOtpAuthUri);
+    // CRLFで揃える。Windows系ツール(WinAuth/メモ帳)で開きやすくするため。
+    const content = lines.join('\r\n') + '\r\n';
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    downloadFile(`self-built-2fa-${filenameSuffix}-${ts}.json`, json);
+    downloadFile(`self-built-2fa-${ts}.txt`, content, 'text/plain');
     closeExportModal();
   } catch (e) {
-    errEl.textContent = e.message;
+    errEl.textContent = 'エクスポート失敗: ' + e.message;
   }
 }
 
-function downloadFile(filename, content) {
-  const blob = new Blob([content], { type: 'application/json' });
+function downloadFile(filename, content, mime = 'text/plain') {
+  const blob = new Blob([content], { type: mime + ';charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -480,28 +448,22 @@ function downloadFile(filename, content) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-// ---------- インポート ----------
+// ---------- インポート (WinAuth互換: 1行1 otpauth:// URI) ----------
 
 // インポート中の作業領域。モーダルを閉じるとリセットする。
-let importEnvelope = null;
 let importAccounts = null;
 
 function openImportModal() {
   $('#importModal').classList.remove('hidden');
   $('#importError').textContent = '';
   $('#importFile').value = '';
-  $('#importPassword').value = '';
-  $('#importPasswordSection').classList.add('hidden');
   $('#importPreview').classList.add('hidden');
-  $('#importDecryptBtn').classList.add('hidden');
   $('#importConfirmBtn').classList.add('hidden');
-  importEnvelope = null;
   importAccounts = null;
 }
 
 function closeImportModal() {
   $('#importModal').classList.add('hidden');
-  importEnvelope = null;
   importAccounts = null;
 }
 
@@ -513,57 +475,41 @@ async function onImportFileSelected(e) {
 
   try {
     const text = await file.text();
-    const envelope = JSON.parse(text);
-    if (envelope.type !== 'self-built-2fa-export') {
-      throw new Error('対応していないファイル形式です (このアプリのエクスポートファイルではありません)');
-    }
-    importEnvelope = envelope;
+    // 改行(\r\n, \n)で分割し、空行と# / //で始まるコメント行を除外
+    const rawLines = text.split(/\r?\n/);
+    const lines = rawLines
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('//'));
 
-    if (envelope.encrypted) {
-      // 暗号化済 → パスワード入力を要求
-      $('#importPasswordSection').classList.remove('hidden');
-      $('#importDecryptBtn').classList.remove('hidden');
-      $('#importConfirmBtn').classList.add('hidden');
-      $('#importPreview').classList.add('hidden');
-      $('#importPassword').focus();
-    } else {
-      // 平文 → そのままプレビュー
-      if (!Array.isArray(envelope.accounts)) {
-        throw new Error('accountsフィールドが見つかりません');
+    if (lines.length === 0) {
+      throw new Error('otpauth:// で始まる行が見つかりません');
+    }
+
+    const parsed = [];
+    const errors = [];
+    lines.forEach((line, idx) => {
+      try {
+        parsed.push(parseOtpAuthUri(line));
+      } catch (err) {
+        errors.push(`${idx + 1}行目: ${err.message}`);
       }
-      importAccounts = envelope.accounts;
-      showImportPreview(importAccounts);
+    });
+
+    if (parsed.length === 0) {
+      throw new Error('有効なotpauth:// URIが1件もありません\n' + errors.slice(0, 3).join('\n'));
+    }
+
+    importAccounts = parsed;
+    showImportPreview(importAccounts);
+
+    if (errors.length > 0) {
+      errEl.textContent = `${errors.length}件をスキップしました (先頭: ${errors[0]})`;
     }
   } catch (err) {
     errEl.textContent = err.message;
-    importEnvelope = null;
-  }
-}
-
-async function onImportDecrypt() {
-  const errEl = $('#importError');
-  errEl.textContent = '';
-  const pw = $('#importPassword').value;
-  if (!pw) { errEl.textContent = 'パスワードを入力してください'; return; }
-  if (!importEnvelope) { errEl.textContent = 'ファイルが選択されていません'; return; }
-
-  try {
-    $('#importDecryptBtn').disabled = true;
-    $('#importDecryptBtn').textContent = '復号中...';
-    importAccounts = await decryptFromExport(pw, importEnvelope);
-    if (!Array.isArray(importAccounts)) {
-      throw new Error('復号結果が不正です');
-    }
-    $('#importPassword').value = '';
-    $('#importPasswordSection').classList.add('hidden');
-    $('#importDecryptBtn').classList.add('hidden');
-    showImportPreview(importAccounts);
-  } catch (e) {
-    errEl.textContent = e.message;
-    $('#importPassword').select();
-  } finally {
-    $('#importDecryptBtn').disabled = false;
-    $('#importDecryptBtn').textContent = '復号';
+    importAccounts = null;
+    $('#importPreview').classList.add('hidden');
+    $('#importConfirmBtn').classList.add('hidden');
   }
 }
 

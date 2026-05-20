@@ -385,6 +385,15 @@ summary {
 }
 
 /* エクスポート/インポート専用 */
+.modal-content code {
+  font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  background: #0f1115;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #4a9eff;
+}
+
 .modal-content input[type="file"] {
   width: 100%;
   padding: 8px;

@@ -101,3 +101,30 @@ function parseOtpAuthUri(uri) {
     algorithm,
   };
 }
+
+// アカウントオブジェクト → otpauth:// URI
+// WinAuth / KeePass / Aegis 等が出力する「1行1 otpauth URI」形式のエクスポート/インポートで使う。
+// 仕様: https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+function buildOtpAuthUri(acc) {
+  if (acc.type && acc.type !== 'totp') {
+    throw new Error('TOTPのみエクスポート対応です: ' + acc.type);
+  }
+  // ラベル部 ("Issuer:account" or "account")。両方URIエンコードした上で ":" で連結。
+  const labelParts = [];
+  if (acc.issuer) labelParts.push(encodeURIComponent(acc.issuer));
+  labelParts.push(encodeURIComponent(acc.account || ''));
+  const label = labelParts.join(':');
+
+  const params = new URLSearchParams();
+  params.set('secret', acc.secret);
+  if (acc.issuer) params.set('issuer', acc.issuer);
+  // digits/period/algorithmはデフォルト値以外のときだけ含める (URIが短くなり、Authenticator互換性も上がる)
+  if (acc.digits && acc.digits !== 6) params.set('digits', String(acc.digits));
+  if (acc.period && acc.period !== 30) params.set('period', String(acc.period));
+  if (acc.algorithm && acc.algorithm !== 'SHA-1' && acc.algorithm !== 'SHA1') {
+    // otpauthのalgorithmはハイフンなし表記が一般的 (SHA1/SHA256/SHA512)
+    params.set('algorithm', acc.algorithm.replace('SHA-', 'SHA'));
+  }
+
+  return `otpauth://totp/${label}?${params.toString()}`;
+}

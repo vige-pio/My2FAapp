@@ -122,38 +122,22 @@
   <!-- エクスポートモーダル -->
   <div id="exportModal" class="modal hidden">
     <div class="modal-content">
-      <h2>エクスポート</h2>
+      <h2>エクスポート (WinAuth互換)</h2>
       <p class="hint">
-        現在登録されている <span id="exportCount">0</span> 件のアカウントをファイルに書き出します。
+        現在登録されている <span id="exportCount">0</span> 件のアカウントを、1行1 <code>otpauth://</code> URI のテキストファイルとして書き出します。
+        WinAuth / KeePass / Aegis / Bitwarden 等で読み込めます。
       </p>
-      <div class="tabs">
-        <button class="tab active" data-export-tab="encrypted">暗号化 (推奨)</button>
-        <button class="tab" data-export-tab="plain">平文</button>
-      </div>
-
-      <div class="tab-pane" data-export-pane="encrypted">
-        <label>エクスポート用パスワード</label>
-        <input type="password" id="exportPassword" placeholder="復元時に必要" autocomplete="new-password">
-        <label>パスワード（確認）</label>
-        <input type="password" id="exportPasswordConfirm" autocomplete="new-password">
-        <p class="hint">
-          マスターパスワードとは別の任意のパスワードを設定できます。
+      <div class="warning-box">
+        <strong>⚠️ 注意</strong>
+        <p>
+          この形式はWinAuthの仕様に合わせ <strong>暗号化されていません</strong>。
+          ファイルが流出すると、紐づく全アカウントの2要素認証が突破されます。<br>
+          書き出した後は速やかに安全な場所（暗号化ボリューム等）へ移動してください。
         </p>
-      </div>
-
-      <div class="tab-pane hidden" data-export-pane="plain">
-        <div class="warning-box">
-          <strong>⚠️ 危険</strong>
-          <p>
-            平文エクスポートは全2FAシークレットがファイルにそのまま書き出されます。<br>
-            ファイル流出時、紐づく全アカウントの2要素認証が突破されます。<br>
-            <strong>暗号化エクスポートの使用を強く推奨します。</strong>
-          </p>
-          <label class="checkbox-label">
-            <input type="checkbox" id="exportPlainAck">
-            リスクを理解しました
-          </label>
-        </div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="exportAck">
+          リスクを理解しました
+        </label>
       </div>
 
       <div class="modal-actions">
@@ -167,14 +151,12 @@
   <!-- インポートモーダル -->
   <div id="importModal" class="modal hidden">
     <div class="modal-content">
-      <h2>インポート</h2>
-      <p class="hint">エクスポートしたJSONファイルを選択してください。</p>
-      <input type="file" id="importFile" accept="application/json,.json">
-
-      <div id="importPasswordSection" class="hidden">
-        <label>エクスポート時のパスワード</label>
-        <input type="password" id="importPassword" autocomplete="current-password">
-      </div>
+      <h2>インポート (WinAuth互換)</h2>
+      <p class="hint">
+        1行1 <code>otpauth://</code> URI 形式のテキストファイル(.txt)を選択してください。<br>
+        WinAuthの「Export ▸ Plain text」で出力したファイル等。
+      </p>
+      <input type="file" id="importFile" accept=".txt,text/plain">
 
       <div id="importPreview" class="hidden">
         <p class="hint">
@@ -188,7 +170,6 @@
 
       <div class="modal-actions">
         <button id="importCancelBtn">キャンセル</button>
-        <button id="importDecryptBtn" class="primary hidden">復号</button>
         <button id="importConfirmBtn" class="primary hidden">追加する</button>
       </div>
       <div id="importError" class="error"></div>

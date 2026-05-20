@@ -99,7 +99,7 @@ Google Authenticator互換クライアントと比較して同じコードが出
 
 - **新しい認証アルゴリズム追加**: `totp.js` の `generateTOTP` は `crypto.subtle.importKey` の `hash` パラメータでSHA-1/256/512に対応済。HOTPは未対応（counter永続化が必要なため要設計）。
 - **アカウント編集機能の追加**: 現在は追加/削除のみ。編集を足す場合、`persistAccounts` で同IDを置換すれば良い。secretの再表示は禁止（書き換える場合も新規入力させる）。
-- **エクスポート/インポート (v1.2.0で実装済)**: `popup.js` の `onRunExport` / `onImportConfirm` 周辺。エクスポートは「暗号化(マスターと別パスワードで再暗号化)」と「平文(警告ダイアログ + 同意チェック必須)」の2モード。インポートは `type: 'self-built-2fa-export'` のJSONを判別し、暗号化済ならパスワードを要求。インポート時はid/createdAtを再採番し、既存アカウントに追記する(重複検出なし)。ファイル形式は `crypto.js` の `encryptForExport` 参照。
+- **エクスポート/インポート (v1.3.0〜 WinAuth互換)**: `popup.js` の `onRunExport` / `onImportFileSelected` 周辺。形式は **WinAuthのPlain text export** に合わせた「1行1 `otpauth://` URI のテキストファイル(.txt)」。CRLF区切り、UTF-8。KeePass / Aegis / Bitwarden 等の主要ツールとも相互運用可能。エクスポートは暗号化されないため警告ダイアログ + 同意チェック必須。インポートは空行と `#` / `//` で始まるコメント行をスキップ。1行ごとに `parseOtpAuthUri` (totp.js) を通し、失敗行は件数だけ報告してスキップ。`buildOtpAuthUri` は totp.js 側、`parseOtpAuthUri` と対。取り込み時はid/createdAtを再採番し、既存アカウントに追記する(重複検出なし)。
 - **アイコン差し替え**: `icons/` 配下の `icon16.png` / `icon48.png` / `icon128.png` を置き換えるだけ。manifest.json も合わせて確認。
 
 ## やってはいけないこと

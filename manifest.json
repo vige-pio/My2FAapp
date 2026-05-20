@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Self-Built 2FA",
-  "version": "1.2.0",
-  "description": "自己開発の2段階認証(TOTP)コード生成拡張機能。完全ローカル動作・ネットワーク通信なし・マスターパスワードで暗号化保存(セッション中は自動解錠)。インポート/エクスポート対応。",
+  "version": "1.3.0",
+  "description": "自己開発の2段階認証(TOTP)コード生成拡張機能。完全ローカル動作・ネットワーク通信なし・マスターパスワードで暗号化保存(セッション中は自動解錠)。WinAuth互換のインポート/エクスポート対応。",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Self-Built 2FA",
