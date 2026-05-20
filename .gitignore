@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (将来追加されたとき用)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Claude Code ローカル設定
+.claude/settings.local.json
+
+# 配布アーカイブ
+*.zip
+*.crx
+*.pem
+dist/
+build/
+
+# 個人ヴォールトのバックアップ等(誤コミット防止)
+*.vault
+*.vault.json
+vault-backup*

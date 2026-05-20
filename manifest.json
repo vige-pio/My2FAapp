@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Self-Built 2FA",
+  "version": "1.0.0",
+  "description": "自己開発の2段階認証(TOTP)コード生成拡張機能。完全ローカル動作・ネットワーク通信なし・マスターパスワードで暗号化保存。",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Self-Built 2FA",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

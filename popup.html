@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- 画面1: 初回セットアップ -->
+  <section id="setupScreen" class="screen hidden">
+    <div class="screen-content">
+      <h2>初回セットアップ</h2>
+      <p class="hint">
+        マスターパスワードを設定してください。<br>
+        このパスワードでアカウント情報を暗号化します。<br>
+        <strong>パスワードは復元できません</strong>。忘れると保存データは失われます。
+      </p>
+      <label>マスターパスワード</label>
+      <input type="password" id="setupPassword" placeholder="8文字以上推奨" autocomplete="new-password">
+      <label>パスワード（確認）</label>
+      <input type="password" id="setupPasswordConfirm" autocomplete="new-password">
+      <button id="setupBtn" class="primary block">設定する</button>
+      <div id="setupError" class="error"></div>
+    </div>
+  </section>
+
+  <!-- 画面2: 解錠 -->
+  <section id="unlockScreen" class="screen hidden">
+    <div class="screen-content">
+      <h2>ロック解除</h2>
+      <label>マスターパスワード</label>
+      <input type="password" id="unlockPassword" autocomplete="current-password">
+      <button id="unlockBtn" class="primary block">解除</button>
+      <div id="unlockError" class="error"></div>
+      <details class="danger-zone">
+        <summary>パスワードを忘れた場合</summary>
+        <p class="hint">
+          ヴォールトをリセットすると、暗号化された全てのアカウント情報が削除されます。<br>
+          この操作は取り消せません。
+        </p>
+        <button id="resetBtn" class="danger-btn block">ヴォールトをリセット</button>
+      </details>
+    </div>
+  </section>
+
+  <!-- 画面3: メイン -->
+  <section id="appScreen" class="screen hidden">
+    <header>
+      <h1>Self-Built 2FA</h1>
+      <div class="header-actions">
+        <button id="lockBtn" class="icon-btn" title="ロック">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </button>
+        <button id="addBtn" class="icon-btn" title="アカウント追加">+</button>
+      </div>
+    </header>
+    <div id="accountList"></div>
+  </section>
+
+  <!-- アカウント追加モーダル -->
+  <div id="addModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>アカウント追加</h2>
+      <div class="tabs">
+        <button class="tab active" data-tab="uri">URI貼り付け</button>
+        <button class="tab" data-tab="manual">手入力</button>
+      </div>
+
+      <div class="tab-pane" data-pane="uri">
+        <label>otpauth:// URI</label>
+        <textarea id="uriInput" placeholder="otpauth://totp/Issuer:account?secret=...&issuer=..." autocomplete="off" spellcheck="false"></textarea>
+        <p class="hint">サービスのQRコードを別端末で読み取り、URI文字列を貼り付けてください。</p>
+      </div>
+
+      <div class="tab-pane hidden" data-pane="manual">
+        <label>サービス名 (Issuer)</label>
+        <input type="text" id="manualIssuer" placeholder="例: Google" autocomplete="off">
+        <label>アカウント名</label>
+        <input type="text" id="manualAccount" placeholder="例: user@example.com" autocomplete="off">
+        <label>シークレット (Base32)</label>
+        <input type="text" id="manualSecret" placeholder="例: JBSWY3DPEHPK3PXP" autocomplete="off" spellcheck="false">
+        <details>
+          <summary>詳細設定</summary>
+          <label>桁数</label>
+          <select id="manualDigits">
+            <option>6</option><option>7</option><option>8</option>
+          </select>
+          <label>周期 (秒)</label>
+          <input type="number" id="manualPeriod" value="30" min="1">
+          <label>アルゴリズム</label>
+          <select id="manualAlgo">
+            <option>SHA1</option><option>SHA256</option><option>SHA512</option>
+          </select>
+        </details>
+      </div>
+
+      <div class="modal-actions">
+        <button id="cancelBtn">キャンセル</button>
+        <button id="saveBtn" class="primary">保存</button>
+      </div>
+      <div id="addError" class="error"></div>
+    </div>
+  </div>
+
+  <script src="totp.js"></script>
+  <script src="crypto.js"></script>
+  <script src="storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
