@@ -68,6 +68,27 @@ function bindGlobalHandlers() {
   // メイン画面
   $('#lockBtn').addEventListener('click', onLock);
   $('#addBtn').addEventListener('click', openAddModal);
+  $('#exportBtn').addEventListener('click', openExportModal);
+  $('#importBtn').addEventListener('click', openImportModal);
+
+  // エクスポートモーダル
+  $('#exportCancelBtn').addEventListener('click', closeExportModal);
+  $('#exportRunBtn').addEventListener('click', onRunExport);
+  $('#exportModal').addEventListener('click', (e) => {
+    if (e.target === $('#exportModal')) closeExportModal();
+  });
+  $$('[data-export-tab]').forEach(t => {
+    t.addEventListener('click', () => switchExportTab(t.dataset.exportTab));
+  });
+
+  // インポートモーダル
+  $('#importCancelBtn').addEventListener('click', closeImportModal);
+  $('#importFile').addEventListener('change', onImportFileSelected);
+  $('#importDecryptBtn').addEventListener('click', onImportDecrypt);
+  $('#importConfirmBtn').addEventListener('click', onImportConfirm);
+  $('#importModal').addEventListener('click', (e) => {
+    if (e.target === $('#importModal')) closeImportModal();
+  });
 
   // モーダル
   $('#cancelBtn').addEventListener('click', closeAddModal);
@@ -378,6 +399,234 @@ async function onSaveAccount() {
     render();
   } catch (e) {
     errEl.textContent = e.message;
+  }
+}
+
+// ---------- エクスポート ----------
+
+function openExportModal() {
+  $('#exportModal').classList.remove('hidden');
+  $('#exportError').textContent = '';
+  $('#exportPassword').value = '';
+  $('#exportPasswordConfirm').value = '';
+  $('#exportPlainAck').checked = false;
+  $('#exportCount').textContent = String(accounts.length);
+  switchExportTab('encrypted');
+}
+
+function closeExportModal() {
+  $('#exportModal').classList.add('hidden');
+}
+
+function switchExportTab(name) {
+  $$('[data-export-tab]').forEach(t => t.classList.toggle('active', t.dataset.exportTab === name));
+  $$('[data-export-pane]').forEach(p => p.classList.toggle('hidden', p.dataset.exportPane !== name));
+}
+
+async function onRunExport() {
+  const errEl = $('#exportError');
+  errEl.textContent = '';
+  if (accounts.length === 0) {
+    errEl.textContent = 'エクスポートするアカウントがありません';
+    return;
+  }
+  const mode = document.querySelector('[data-export-tab].active').dataset.exportTab;
+
+  try {
+    // 内部用フィールド (id, createdAt) はエクスポートしない
+    const sanitized = accounts.map(({ id, createdAt, ...rest }) => rest);
+    let envelope;
+    let filenameSuffix;
+
+    if (mode === 'encrypted') {
+      const pw = $('#exportPassword').value;
+      const pw2 = $('#exportPasswordConfirm').value;
+      if (pw.length < 8) throw new Error('パスワードは8文字以上にしてください');
+      if (pw !== pw2) throw new Error('パスワードが一致しません');
+      envelope = await encryptForExport(pw, sanitized);
+      filenameSuffix = 'encrypted';
+    } else {
+      if (!$('#exportPlainAck').checked) {
+        throw new Error('「リスクを理解しました」にチェックを入れてください');
+      }
+      envelope = {
+        type: 'self-built-2fa-export',
+        version: 1,
+        encrypted: false,
+        accounts: sanitized,
+      };
+      filenameSuffix = 'PLAINTEXT';
+    }
+
+    const json = JSON.stringify(envelope, null, 2);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    downloadFile(`self-built-2fa-${filenameSuffix}-${ts}.json`, json);
+    closeExportModal();
+  } catch (e) {
+    errEl.textContent = e.message;
+  }
+}
+
+function downloadFile(filename, content) {
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Blob URLの解放は次のイベントループで（即時revokeするとブラウザによってDLが中断する）
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+// ---------- インポート ----------
+
+// インポート中の作業領域。モーダルを閉じるとリセットする。
+let importEnvelope = null;
+let importAccounts = null;
+
+function openImportModal() {
+  $('#importModal').classList.remove('hidden');
+  $('#importError').textContent = '';
+  $('#importFile').value = '';
+  $('#importPassword').value = '';
+  $('#importPasswordSection').classList.add('hidden');
+  $('#importPreview').classList.add('hidden');
+  $('#importDecryptBtn').classList.add('hidden');
+  $('#importConfirmBtn').classList.add('hidden');
+  importEnvelope = null;
+  importAccounts = null;
+}
+
+function closeImportModal() {
+  $('#importModal').classList.add('hidden');
+  importEnvelope = null;
+  importAccounts = null;
+}
+
+async function onImportFileSelected(e) {
+  const errEl = $('#importError');
+  errEl.textContent = '';
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const envelope = JSON.parse(text);
+    if (envelope.type !== 'self-built-2fa-export') {
+      throw new Error('対応していないファイル形式です (このアプリのエクスポートファイルではありません)');
+    }
+    importEnvelope = envelope;
+
+    if (envelope.encrypted) {
+      // 暗号化済 → パスワード入力を要求
+      $('#importPasswordSection').classList.remove('hidden');
+      $('#importDecryptBtn').classList.remove('hidden');
+      $('#importConfirmBtn').classList.add('hidden');
+      $('#importPreview').classList.add('hidden');
+      $('#importPassword').focus();
+    } else {
+      // 平文 → そのままプレビュー
+      if (!Array.isArray(envelope.accounts)) {
+        throw new Error('accountsフィールドが見つかりません');
+      }
+      importAccounts = envelope.accounts;
+      showImportPreview(importAccounts);
+    }
+  } catch (err) {
+    errEl.textContent = err.message;
+    importEnvelope = null;
+  }
+}
+
+async function onImportDecrypt() {
+  const errEl = $('#importError');
+  errEl.textContent = '';
+  const pw = $('#importPassword').value;
+  if (!pw) { errEl.textContent = 'パスワードを入力してください'; return; }
+  if (!importEnvelope) { errEl.textContent = 'ファイルが選択されていません'; return; }
+
+  try {
+    $('#importDecryptBtn').disabled = true;
+    $('#importDecryptBtn').textContent = '復号中...';
+    importAccounts = await decryptFromExport(pw, importEnvelope);
+    if (!Array.isArray(importAccounts)) {
+      throw new Error('復号結果が不正です');
+    }
+    $('#importPassword').value = '';
+    $('#importPasswordSection').classList.add('hidden');
+    $('#importDecryptBtn').classList.add('hidden');
+    showImportPreview(importAccounts);
+  } catch (e) {
+    errEl.textContent = e.message;
+    $('#importPassword').select();
+  } finally {
+    $('#importDecryptBtn').disabled = false;
+    $('#importDecryptBtn').textContent = '復号';
+  }
+}
+
+function showImportPreview(items) {
+  $('#importCount').textContent = String(items.length);
+  const list = $('#importPreviewList');
+  list.innerHTML = items.slice(0, 50).map(acc => `
+    <li>
+      <span class="preview-issuer">${escapeHtml(acc.issuer || '(unnamed)')}</span>
+      <span class="preview-account">${escapeHtml(acc.account || '')}</span>
+    </li>
+  `).join('');
+  if (items.length > 50) {
+    list.innerHTML += `<li><em>...他 ${items.length - 50} 件</em></li>`;
+  }
+  $('#importPreview').classList.remove('hidden');
+  $('#importConfirmBtn').classList.remove('hidden');
+}
+
+async function onImportConfirm() {
+  const errEl = $('#importError');
+  errEl.textContent = '';
+  if (!Array.isArray(importAccounts) || importAccounts.length === 0) {
+    errEl.textContent = '取り込むアカウントがありません';
+    return;
+  }
+  try {
+    $('#importConfirmBtn').disabled = true;
+    $('#importConfirmBtn').textContent = '追加中...';
+    // 取り込み時にid/createdAtを再採番。重複検出はしない。
+    const now = Date.now();
+    const fresh = importAccounts.map(acc => ({
+      type: acc.type || 'totp',
+      issuer: String(acc.issuer || ''),
+      account: String(acc.account || ''),
+      secret: String(acc.secret || ''),
+      digits: Number(acc.digits) || 6,
+      period: Number(acc.period) || 30,
+      algorithm: typeof acc.algorithm === 'string'
+        ? (acc.algorithm.startsWith('SHA-') ? acc.algorithm : acc.algorithm.replace('SHA', 'SHA-'))
+        : 'SHA-1',
+      id: crypto.randomUUID(),
+      createdAt: now,
+    }));
+
+    // 妥当性チェック: 各エントリで一度TOTP生成を試みる
+    for (const acc of fresh) {
+      await generateTOTP(acc.secret, {
+        digits: acc.digits,
+        period: acc.period,
+        algorithm: acc.algorithm,
+      });
+    }
+
+    accounts = accounts.concat(fresh);
+    await persistAccounts(cryptoKey, accounts);
+    closeImportModal();
+    render();
+  } catch (e) {
+    errEl.textContent = '取り込み失敗: ' + e.message;
+  } finally {
+    $('#importConfirmBtn').disabled = false;
+    $('#importConfirmBtn').textContent = '追加する';
   }
 }
 

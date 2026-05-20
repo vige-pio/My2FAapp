@@ -48,6 +48,20 @@
     <header>
       <h1>Self-Built 2FA</h1>
       <div class="header-actions">
+        <button id="exportBtn" class="icon-btn" title="エクスポート">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v12"/>
+            <path d="M7 8l5-5 5 5"/>
+            <path d="M5 21h14"/>
+          </svg>
+        </button>
+        <button id="importBtn" class="icon-btn" title="インポート">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 21V9"/>
+            <path d="M7 16l5 5 5-5"/>
+            <path d="M5 3h14"/>
+          </svg>
+        </button>
         <button id="lockBtn" class="icon-btn" title="ロック">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2"/>
@@ -102,6 +116,82 @@
         <button id="saveBtn" class="primary">保存</button>
       </div>
       <div id="addError" class="error"></div>
+    </div>
+  </div>
+
+  <!-- エクスポートモーダル -->
+  <div id="exportModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>エクスポート</h2>
+      <p class="hint">
+        現在登録されている <span id="exportCount">0</span> 件のアカウントをファイルに書き出します。
+      </p>
+      <div class="tabs">
+        <button class="tab active" data-export-tab="encrypted">暗号化 (推奨)</button>
+        <button class="tab" data-export-tab="plain">平文</button>
+      </div>
+
+      <div class="tab-pane" data-export-pane="encrypted">
+        <label>エクスポート用パスワード</label>
+        <input type="password" id="exportPassword" placeholder="復元時に必要" autocomplete="new-password">
+        <label>パスワード（確認）</label>
+        <input type="password" id="exportPasswordConfirm" autocomplete="new-password">
+        <p class="hint">
+          マスターパスワードとは別の任意のパスワードを設定できます。
+        </p>
+      </div>
+
+      <div class="tab-pane hidden" data-export-pane="plain">
+        <div class="warning-box">
+          <strong>⚠️ 危険</strong>
+          <p>
+            平文エクスポートは全2FAシークレットがファイルにそのまま書き出されます。<br>
+            ファイル流出時、紐づく全アカウントの2要素認証が突破されます。<br>
+            <strong>暗号化エクスポートの使用を強く推奨します。</strong>
+          </p>
+          <label class="checkbox-label">
+            <input type="checkbox" id="exportPlainAck">
+            リスクを理解しました
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="exportCancelBtn">キャンセル</button>
+        <button id="exportRunBtn" class="primary">ダウンロード</button>
+      </div>
+      <div id="exportError" class="error"></div>
+    </div>
+  </div>
+
+  <!-- インポートモーダル -->
+  <div id="importModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>インポート</h2>
+      <p class="hint">エクスポートしたJSONファイルを選択してください。</p>
+      <input type="file" id="importFile" accept="application/json,.json">
+
+      <div id="importPasswordSection" class="hidden">
+        <label>エクスポート時のパスワード</label>
+        <input type="password" id="importPassword" autocomplete="current-password">
+      </div>
+
+      <div id="importPreview" class="hidden">
+        <p class="hint">
+          <strong><span id="importCount">0</span> 件</strong> のアカウントを読み込みました。
+        </p>
+        <ul id="importPreviewList" class="preview-list"></ul>
+        <p class="hint">
+          既存のアカウントに追加されます（重複チェックは行いません）。
+        </p>
+      </div>
+
+      <div class="modal-actions">
+        <button id="importCancelBtn">キャンセル</button>
+        <button id="importDecryptBtn" class="primary hidden">復号</button>
+        <button id="importConfirmBtn" class="primary hidden">追加する</button>
+      </div>
+      <div id="importError" class="error"></div>
     </div>
   </div>
 
