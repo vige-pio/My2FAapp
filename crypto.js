@@ -24,7 +24,7 @@ async function deriveKey(password, salt) {
     },
     baseKey,
     { name: 'AES-GCM', length: 256 },
-    false,
+    true, // exportable: chrome.storage.session に raw bytes でキャッシュするため必要
     ['encrypt', 'decrypt']
   );
 }

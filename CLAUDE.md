@@ -61,6 +61,7 @@ icons/           — 拡張機能アイコン (16/48/128)
 - **AES-GCM**: 認証付き暗号。復号失敗 = 改ざん or パスワード間違いとして同じエラーを返す（情報漏洩防止）。
 - **CSP**: `manifest.json` で `script-src 'self'; object-src 'self'` を強制。インラインスクリプト/eval禁止。
 - **メモリ揮発**: `cryptoKey`/`accounts` はpopup.jsのモジュールスコープ変数。ポップアップを閉じれば消える（永続化しない）。
+- **セッション鍵キャッシュ**: 解錠した派生鍵を `chrome.storage.session` に最後の使用から8時間キャッシュ（`storage.js` の `SESSION_TTL_MS`）。session storageはブラウザ終了で消え、他拡張・Webページから読めないため、storage.localより一段揮発性が高い。利便性とセキュリティの妥協点。ロックボタン or ヴォールトリセットで即座にクリアされる。
 - **`host_permissions: []`**: Webサイトへのアクセスは一切しない。secretをページから自動入力する機能を追加する場合は、設計レビューを行うこと。
 - **クリップボードコピー**: TOTPコード本体は `navigator.clipboard.writeText` でコピーするが、secretは絶対にUIに表示しない/コピーさせない。
 
@@ -105,6 +106,6 @@ Google Authenticator互換クライアントと比較して同じコードが出
 
 - secretをログ/console出力する
 - `host_permissions` を `<all_urls>` 等に拡げる（必要性が出たら必ず議論）
-- マスターパスワードや派生鍵をstorageに保存する
+- マスターパスワード（平文）をstorageに保存する。派生鍵を `chrome.storage.session` にTTL付きでキャッシュするのは許容（v1.1.0〜）だが、 `chrome.storage.local` に派生鍵を保存するのは禁止（ディスクに永続化されてしまう）
 - `eval` / `new Function` / インラインイベントハンドラの追加（CSP違反）
 - 外部CDNからスクリプト読み込み（CSP違反 + サプライチェーン)

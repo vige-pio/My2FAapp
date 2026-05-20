@@ -14,6 +14,22 @@ let updateTimer = null;
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     if (await hasVault()) {
+      // セッション鍵が生きていれば自動解錠
+      const sessionKey = await loadSessionKey();
+      if (sessionKey) {
+        try {
+          const vault = await loadVault();
+          const plaintext = await decryptString(sessionKey, vault.payload);
+          cryptoKey = sessionKey;
+          accounts = JSON.parse(plaintext);
+          enterApp();
+          bindGlobalHandlers();
+          return;
+        } catch (e) {
+          // 鍵不一致(ヴォールト再作成等) や 破損 → セッションを捨てて通常解錠へ
+          await clearSessionKey();
+        }
+      }
       showScreen('unlock');
       $('#unlockPassword').focus();
     } else {
@@ -84,6 +100,7 @@ async function onSetup() {
     $('#setupBtn').textContent = '設定中...';
     cryptoKey = await createVault(pw);
     accounts = [];
+    await saveSessionKey(cryptoKey);
     // パスワードフィールドをクリア
     $('#setupPassword').value = '';
     $('#setupPasswordConfirm').value = '';
@@ -111,6 +128,7 @@ async function onUnlock() {
     const result = await unlockVault(pw);
     cryptoKey = result.key;
     accounts = result.accounts;
+    await saveSessionKey(cryptoKey);
     $('#unlockPassword').value = '';
     enterApp();
   } catch (e) {
@@ -136,14 +154,15 @@ async function onReset() {
   $('#setupPassword').focus();
 }
 
-function onLock() {
-  // メモリから機密情報を消す
+async function onLock() {
+  // 明示的なロック → セッションキャッシュも破棄して次回パスワード必須にする
   cryptoKey = null;
   accounts = [];
   if (updateTimer) {
     clearInterval(updateTimer);
     updateTimer = null;
   }
+  await clearSessionKey();
   showScreen('unlock');
   $('#unlockPassword').focus();
 }

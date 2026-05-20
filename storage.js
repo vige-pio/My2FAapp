@@ -10,6 +10,14 @@
 
 const VAULT_KEY = 'vault';
 
+// セッション鍵キャッシュ (chrome.storage.session = ブラウザ終了で消える揮発ストレージ)
+// パスワード入力の手間を減らすため、解錠後 SESSION_TTL_MS の間は自動解錠する。
+// session storage は他拡張・Webページから読めない & ディスクに書かれないため、
+// 暗号化された storage.local より一段揮発性の高い場所として安全側に倒している。
+const SESSION_KEY_RAW = 'sessionKeyRaw';   // AES-GCM鍵のraw bytes (number[])
+const SESSION_EXPIRES = 'sessionExpiresAt'; // unix ms
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8時間。最後のアクセスから (sliding window)
+
 async function loadVault() {
   const r = await chrome.storage.local.get(VAULT_KEY);
   return r[VAULT_KEY] || null;
@@ -64,4 +72,45 @@ async function persistAccounts(key, accounts) {
 // ヴォールトを完全削除（パスワード忘れた時の最終手段）
 async function destroyVault() {
   await chrome.storage.local.remove(VAULT_KEY);
+  await clearSessionKey();
+}
+
+// ---------- セッション鍵キャッシュ ----------
+
+// 解錠した鍵をセッションに保存。次回ポップアップ起動時のパスワード入力をスキップさせる。
+async function saveSessionKey(key) {
+  const raw = await crypto.subtle.exportKey('raw', key);
+  await chrome.storage.session.set({
+    [SESSION_KEY_RAW]: Array.from(new Uint8Array(raw)),
+    [SESSION_EXPIRES]: Date.now() + SESSION_TTL_MS,
+  });
+}
+
+// セッションから鍵を復元。期限切れ or 不在ならnull。
+// 復元成功時は sliding window として有効期限を再延長する。
+async function loadSessionKey() {
+  const r = await chrome.storage.session.get([SESSION_KEY_RAW, SESSION_EXPIRES]);
+  const raw = r[SESSION_KEY_RAW];
+  const expiresAt = r[SESSION_EXPIRES];
+  if (!raw || !expiresAt) return null;
+  if (Date.now() > expiresAt) {
+    await clearSessionKey();
+    return null;
+  }
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new Uint8Array(raw),
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  // 使われた = まだアクティブなので期限を延長
+  await chrome.storage.session.set({
+    [SESSION_EXPIRES]: Date.now() + SESSION_TTL_MS,
+  });
+  return key;
+}
+
+async function clearSessionKey() {
+  await chrome.storage.session.remove([SESSION_KEY_RAW, SESSION_EXPIRES]);
 }
